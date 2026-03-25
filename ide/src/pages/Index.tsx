@@ -52,7 +52,10 @@ const Index = () => {
     renameNode,
     markSaved,
     network,
+    horizonUrl,
+    customRpcUrl,
     setNetwork,
+    setCustomRpcUrl,
   } = useFileStore();
 
   const { setDiagnostics, clearDiagnostics, errorCount, warningCount } = useDiagnosticsStore();
@@ -519,6 +522,10 @@ const Index = () => {
           line={cursorPos.line}
           col={cursorPos.col}
           network={network}
+          horizonUrl={horizonUrl}
+          customRpcUrl={customRpcUrl}
+          onNetworkChange={setNetwork}
+          onCustomRpcUrlChange={setCustomRpcUrl}
           unsavedCount={unsavedFiles.size}
         />
       </div>

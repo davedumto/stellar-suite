@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { FileNode, sampleContracts } from '@/lib/sample-contracts';
+import { NETWORK_CONFIG, NetworkKey, DEFAULT_CUSTOM_RPC } from '@/lib/networkConfig';
 
 interface TabInfo {
   path: string[];
@@ -13,7 +14,10 @@ interface FileStore {
   activeTabPath: string[];
   unsavedFiles: Set<string>;
 
-  network: string;
+  network: NetworkKey;
+  horizonUrl: string;
+  networkPassphrase: string;
+  customRpcUrl: string;
   identities: Array<{ id: string; name: string; publicKey: string }>;
   activeIdentityId: string | null;
   tokenBalances: Record<string, string>;
@@ -24,7 +28,10 @@ interface FileStore {
   setActiveTabPath: (path: string[]) => void;
   setOpenTabs: (tabs: TabInfo[]) => void;
 
-  setNetwork: (network: string) => void;
+  setNetwork: (network: NetworkKey) => void;
+  setHorizonUrl: (url: string) => void;
+  setNetworkPassphrase: (passphrase: string) => void;
+  setCustomRpcUrl: (url: string) => void;
   setActiveIdentity: (identityId: string | null) => void;
   setTokenBalances: (balances: Record<string,string>) => void;
   setHydrationComplete: (ready: boolean) => void;
@@ -68,6 +75,9 @@ export const useFileStore = create<FileStore>()(
       unsavedFiles: new Set<string>(),
 
       network: "testnet",
+      horizonUrl: NETWORK_CONFIG.testnet.horizon,
+      networkPassphrase: NETWORK_CONFIG.testnet.passphrase,
+      customRpcUrl: DEFAULT_CUSTOM_RPC,
       identities: [
         { id: "local-1", name: "Local Keypair 1", publicKey: "GDEXAMPLELOCAL1" },
         { id: "local-2", name: "Local Keypair 2", publicKey: "GDEXAMPLELOCAL2" },
@@ -80,7 +90,28 @@ export const useFileStore = create<FileStore>()(
       setActiveTabPath: (path) => set({ activeTabPath: path }),
       setOpenTabs: (tabs) => set({ openTabs: tabs }),
 
-      setNetwork: (network) => set({ network }),
+      setNetwork: (network) => {
+        const config = NETWORK_CONFIG[network] || NETWORK_CONFIG.testnet;
+        const customRpcUrl = get().customRpcUrl || DEFAULT_CUSTOM_RPC;
+        const horizonUrl = network === "local" ? customRpcUrl : config.horizon;
+        set({
+          network,
+          horizonUrl,
+          networkPassphrase: config.passphrase,
+        });
+
+        // Update balances after network switch.
+        get().refreshBalances();
+      },
+      setHorizonUrl: (url) => set({ horizonUrl: url }),
+      setNetworkPassphrase: (passphrase) => set({ networkPassphrase: passphrase }),
+      setCustomRpcUrl: (customRpcUrl) => {
+        set({ customRpcUrl });
+        if (get().network === "local") {
+          set({ horizonUrl: customRpcUrl });
+          get().refreshBalances();
+        }
+      },
       setActiveIdentity: (identityId) => set({ activeIdentityId: identityId }),
       setTokenBalances: (balances) => set({ tokenBalances: balances }),
       setHydrationComplete: (ready) => set({ hydrationComplete: ready }),
@@ -231,10 +262,18 @@ export const useFileStore = create<FileStore>()(
         network: state.network,
         activeIdentityId: state.activeIdentityId,
         identities: state.identities,
+        customRpcUrl: state.customRpcUrl,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Refresh balances after rehydration
+          const network = state.network || "testnet";
+          const config = NETWORK_CONFIG[network] || NETWORK_CONFIG.testnet;
+          state.setNetwork(network);
+
+          if (state.customRpcUrl) {
+            state.setCustomRpcUrl(state.customRpcUrl);
+          }
+
           state.refreshBalances().finally(() => {
             state.setHydrationComplete(true);
           });
