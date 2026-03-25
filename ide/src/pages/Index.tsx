@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { FileExplorer } from "@/components/ide/FileExplorer";
 import { EditorTabs } from "@/components/ide/EditorTabs";
 import CodeEditor from "@/components/editor/CodeEditor";
@@ -8,6 +8,8 @@ import { ContractPanel } from "@/components/ide/ContractPanel";
 import { StatusBar } from "@/components/ide/StatusBar";
 import { FileNode } from "@/lib/sample-contracts";
 import { useFileStore } from "@/store/useFileStore";
+import { useDiagnosticsStore } from "@/store/useDiagnosticsStore";
+import { parseMixedOutput } from "@/utils/cargoParser";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -50,6 +52,8 @@ const Index = () => {
     renameNode,
     markSaved,
   } = useFileStore();
+
+  const { setDiagnostics, clearDiagnostics, errorCount, warningCount } = useDiagnosticsStore();
 
   const [terminalExpanded, setTerminalExpanded] = useState(true);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -127,16 +131,123 @@ const Index = () => {
   const handleCompile = useCallback(() => {
     setIsCompiling(true);
     setTerminalExpanded(true);
-    addLog("info", "Compiling contract...");
+    clearDiagnostics();
+    addLog("info", "$ cargo build --message-format=json --target wasm32-unknown-unknown");
     addLog("info", `Target network: ${network}`);
-    setTimeout(() => addLog("info", "Resolving dependencies..."), 400);
-    setTimeout(() => addLog("info", "Building release target..."), 900);
+
+    setTimeout(() => addLog("info", "   Compiling soroban-sdk v20.0.0"), 400);
+    setTimeout(() => addLog("info", "   Compiling hello_world v0.1.0"), 900);
+
     setTimeout(() => {
-      addLog("success", "✓ Compilation successful! WASM binary: 1.2 KB");
-      addLog("info", "Contract hash: 7a8b9c...d4e5f6");
+      // Simulate cargo --message-format=json output (NDJSON)
+      // In production this would come from the backend via WebSocket/postMessage
+      const simulatedCargoOutput = [
+        // Dependency noise — should be ignored (no primary span in src/lib.rs)
+        JSON.stringify({
+          reason: "compiler-message",
+          package_id: "soroban-sdk 20.0.0",
+          message: {
+            message: "unused import: `vec`",
+            code: { code: "unused_imports", explanation: null },
+            level: "warning",
+            spans: [
+              {
+                file_name: "/root/.cargo/registry/src/soroban-sdk/src/lib.rs",
+                line_start: 3,
+                line_end: 3,
+                column_start: 5,
+                column_end: 8,
+                is_primary: true,
+                label: null,
+              },
+            ],
+            children: [],
+          },
+        }),
+        // Error in the user's contract — should be captured
+        JSON.stringify({
+          reason: "compiler-message",
+          package_id: "hello_world 0.1.0",
+          message: {
+            message: "mismatched types: expected `Symbol`, found `u32`",
+            code: { code: "E0308", explanation: null },
+            level: "error",
+            spans: [
+              {
+                file_name: "/workspace/hello_world/src/lib.rs",
+                line_start: 12,
+                line_end: 12,
+                column_start: 9,
+                column_end: 21,
+                is_primary: true,
+                label: "expected `Symbol`, found `u32`",
+              },
+            ],
+            children: [],
+          },
+        }),
+        // Warning in the user's contract
+        JSON.stringify({
+          reason: "compiler-message",
+          package_id: "hello_world 0.1.0",
+          message: {
+            message: "unused variable: `env`",
+            code: { code: "unused_variables", explanation: null },
+            level: "warning",
+            spans: [
+              {
+                file_name: "/workspace/hello_world/src/lib.rs",
+                line_start: 10,
+                line_end: 10,
+                column_start: 16,
+                column_end: 19,
+                is_primary: true,
+                label: "help: if this is intentional, prefix it with an underscore: `_env`",
+              },
+            ],
+            children: [],
+          },
+        }),
+        // Build-finished line — not a compiler-message, should be ignored
+        JSON.stringify({ reason: "build-finished", success: false }),
+      ].join("\n");
+
+      // Determine active contract name from the active file path
+      const contractName = files[0]?.name ?? "hello_world";
+
+      const parsed = parseMixedOutput(simulatedCargoOutput, contractName);
+      setDiagnostics(parsed);
+
+      const errors = parsed.filter((d) => d.severity === "error");
+      const warnings = parsed.filter((d) => d.severity === "warning");
+
+      // Log each diagnostic to the terminal
+      for (const d of parsed) {
+        const prefix = d.severity === "error" ? "error" : "warning";
+        const code = d.code ? `[${d.code}]` : "";
+        addLog(
+          d.severity === "error" ? "error" : "warning",
+          `${prefix}${code}: ${d.message}`
+        );
+        addLog("info", `  --> ${d.fileId}:${d.line}:${d.column}`);
+      }
+
+      if (errors.length > 0) {
+        addLog(
+          "error",
+          `✗ Build failed: ${errors.length} error(s), ${warnings.length} warning(s)`
+        );
+      } else {
+        addLog(
+          "success",
+          `✓ Compilation successful! ${warnings.length > 0 ? `${warnings.length} warning(s)` : "No warnings."}`
+        );
+        addLog("info", "Contract hash: 7a8b9c...d4e5f6");
+      }
+
       setIsCompiling(false);
     }, 1800);
-  }, [network, addLog]);
+  }, [network, addLog, files, clearDiagnostics, setDiagnostics]);
 
   const handleDeploy = useCallback(() => {
     setTerminalExpanded(true);
