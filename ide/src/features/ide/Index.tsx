@@ -8,6 +8,7 @@ import { Terminal } from "@/components/ide/Terminal";
 import { Toolbar } from "@/components/ide/Toolbar";
 import { ContractPanel } from "@/components/ide/ContractPanel";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
+import { ProductTour } from "@/components/ide/ProductTour";
 import { StatusBar } from "@/components/ide/StatusBar";
 import { SearchPane } from "@/components/ide/SearchPane";
 import { useIdentityStore } from "@/store/useIdentityStore";
@@ -392,6 +393,7 @@ const Index = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <ProductTour />
       <Toolbar
         onCompile={handleCompile}
         onDeploy={handleDeploy}

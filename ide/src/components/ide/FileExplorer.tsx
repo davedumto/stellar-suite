@@ -326,6 +326,7 @@ export function FileExplorer({
 
   return (
     <div
+      id="tour-explorer"
       className={`h-full bg-sidebar flex flex-col ${isDragActive ? "ring-2 ring-primary/60 ring-inset" : ""}`}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
