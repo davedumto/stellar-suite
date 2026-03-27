@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, KeyboardEvent, useCallback } from "react";
-import { X, Circle, FileText, FileCode, FileJson, Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/store/workspaceStore";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import {
+  Circle,
+  FileCode,
+  FileJson,
+  FileText,
+  Settings,
+  X,
+} from "lucide-react";
+import { KeyboardEvent, useRef, useCallback } from "react";
 
 export interface TabInfo {
   path: string[];
@@ -15,6 +18,8 @@ export interface TabInfo {
 }
 
 interface EditorTabsProps {
+  tabs?: TabInfo[];
+  activeTab?: string;
   onTabSelect?: (path: string[]) => void;
   onTabClose?: (path: string[]) => void;
 }
@@ -38,10 +43,33 @@ function FileIcon({ name }: { name: string }) {
       </svg>
     );
   }
-  if (ext === "toml") return <Settings className="h-3.5 w-3.5 shrink-0 text-green-400" aria-hidden="true" />;
-  if (ext === "json") return <FileJson className="h-3.5 w-3.5 shrink-0 text-yellow-400" aria-hidden="true" />;
-  if (["ts", "tsx", "js", "jsx"].includes(ext)) return <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" aria-hidden="true" />;
-  return <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
+  if (ext === "toml")
+    return (
+      <Settings
+        className="h-3.5 w-3.5 shrink-0 text-green-400"
+        aria-hidden="true"
+      />
+    );
+  if (ext === "json")
+    return (
+      <FileJson
+        className="h-3.5 w-3.5 shrink-0 text-yellow-400"
+        aria-hidden="true"
+      />
+    );
+  if (["ts", "tsx", "js", "jsx"].includes(ext))
+    return (
+      <FileCode
+        className="h-3.5 w-3.5 shrink-0 text-blue-400"
+        aria-hidden="true"
+      />
+    );
+  return (
+    <FileText
+      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+      aria-hidden="true"
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +155,9 @@ export function EditorTabs({ onTabSelect, onTabClose }: EditorTabsProps) {
             <FileIcon name={tab.name} />
 
             {/* Filename */}
-            <span className="truncate max-w-[80px] md:max-w-[120px]">{tab.name}</span>
+            <span className="truncate max-w-[80px] md:max-w-[120px]">
+              {tab.name}
+            </span>
 
             {/*
               Dirty indicator / close button:
@@ -146,13 +176,22 @@ export function EditorTabs({ onTabSelect, onTabClose }: EditorTabsProps) {
             >
               {isDirty ? (
                 <>
-                  {/* Dot – visible by default, hidden on group hover */}
-                  <Circle className="h-2 w-2 fill-primary text-primary group-hover:hidden" aria-hidden="true" />
-                  {/* X – hidden by default, shown on group hover */}
-                  <X className="h-3 w-3 hidden group-hover:block" aria-hidden="true" />
+                  {/* Dot visible by default, hidden on group hover */}
+                  <Circle
+                    className="h-2 w-2 fill-primary text-primary group-hover:hidden"
+                    aria-hidden="true"
+                  />
+                  {/* X hidden by default, shown on group hover */}
+                  <X
+                    className="h-3 w-3 hidden group-hover:block"
+                    aria-hidden="true"
+                  />
                 </>
               ) : (
-                <X className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+                <X
+                  className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-hidden="true"
+                />
               )}
             </span>
           </button>
