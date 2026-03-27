@@ -6,6 +6,7 @@ import type * as Monaco from "monaco-editor";
 import React, { Suspense, useEffect, useRef } from "react";
 import { analyzeMathSafety } from "../../lib/mathSafetyAnalyzer";
 import { useMathSafetyStore } from "../../store/useMathSafetyStore";
+import { Breadcrumbs } from "./Breadcrumbs";
 
 interface CodeEditorProps {
   onCursorChange?: (line: number, col: number) => void;
@@ -195,47 +196,50 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
   }
 
   return (
-    <div
-      id="tour-monaco"
-      className="h-full w-full overflow-hidden relative border-t border-border"
-    >
-      <Suspense
-        fallback={
-          <div className="h-full flex items-center justify-center bg-[#1e1e2e] text-muted-foreground font-mono text-xs">
-            Loading Editor...
-          </div>
-        }
+    <div className="h-full w-full flex flex-col overflow-hidden">
+      <Breadcrumbs />
+      <div
+        id="tour-monaco"
+        className="flex-1 w-full overflow-hidden relative border-t border-border"
       >
-        <Editor
-          height="100%"
-          defaultLanguage={
-            activeFile.language ||
-            (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
+        <Suspense
+          fallback={
+            <div className="h-full flex items-center justify-center bg-[#1e1e2e] text-muted-foreground font-mono text-xs">
+              Loading Editor...
+            </div>
           }
-          language={
-            activeFile.language ||
-            (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
-          }
-          value={activeFile.content}
-          theme="stellar-dark"
-          onChange={handleEditorChange}
-          onMount={handleEditorDidMount}
-          options={{
-            fontSize: 14,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            tabSize: 4,
-            lineNumbers: "on",
-            glyphMargin: false,
-            folding: true,
-            lineDecorationsWidth: 10,
-            lineNumbersMinChars: 3,
-            fontFamily:
-              "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
-          }}
-        />
-      </Suspense>
+        >
+          <Editor
+            height="100%"
+            defaultLanguage={
+              activeFile.language ||
+              (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
+            }
+            language={
+              activeFile.language ||
+              (activeFile.name?.endsWith(".toml") ? "toml" : "rust")
+            }
+            value={activeFile.content}
+            theme="stellar-dark"
+            onChange={handleEditorChange}
+            onMount={handleEditorDidMount}
+            options={{
+              fontSize: 14,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 4,
+              lineNumbers: "on",
+              glyphMargin: false,
+              folding: true,
+              lineDecorationsWidth: 10,
+              lineNumbersMinChars: 3,
+              fontFamily:
+                "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+            }}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 };
