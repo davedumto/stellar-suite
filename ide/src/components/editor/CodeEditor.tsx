@@ -1,6 +1,8 @@
 import type { FileNode } from "@/lib/sample-contracts";
 import { useDiagnosticsStore } from "@/store/useDiagnosticsStore";
 import { useWorkspaceStore } from "@/store/workspaceStore";
+import { applyEditsToTree, computeRenameEdits, validateRustIdentifier } from "@/utils/renameProvider";
+import { useDiagnosticsStore as _useDiagnosticsStore } from "@/store/useDiagnosticsStore";
 import Editor, { OnChange, OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import React, { Suspense, useEffect, useRef } from "react";
@@ -20,6 +22,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
   const rustProviderRegistered = useRef(false);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  // Keep a live ref to files so the rename provider always sees the latest state
+  const filesRef = useRef(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
 
   const activeFile = React.useMemo(() => {
     const findNode = (
@@ -181,6 +186,76 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
           ];
 
           return { suggestions };
+        },
+      });
+
+      // Workspace-wide rename provider (F2)
+      monaco.languages.registerRenameProvider("rust", {
+        provideRenameEdits(model, position, newName) {
+          const oldName = model.getWordAtPosition(position)?.word;
+          if (!oldName) return { edits: [] };
+
+          const validationError = validateRustIdentifier(newName);
+          if (validationError) {
+            return Promise.reject(new Error(validationError));
+          }
+
+          const { edits, matchCount, error } = computeRenameEdits(
+            filesRef.current,
+            oldName,
+            newName,
+          );
+
+          if (error) return Promise.reject(new Error(error));
+          if (matchCount === 0) return { edits: [] };
+
+          // Atomic update: compute the full new tree then write it in one setFiles call.
+          // Zustand's persist middleware flushes this to IndexedDB as a single transaction.
+          const { setFiles } = useWorkspaceStore.getState();
+          const nextTree = applyEditsToTree(filesRef.current, edits);
+          setFiles(nextTree);
+
+          // Invalidate the symbol index so the next build re-indexes from scratch.
+          _useDiagnosticsStore.getState().clearDiagnostics();
+
+          // Return workspace edits so Monaco can show the preview diff (F2 UI)
+          const workspaceEdits: Monaco.languages.WorkspaceEdit = {
+            edits: edits.flatMap((edit) => {
+              const uri = monaco.Uri.parse(`inmemory://workspace/${edit.fileId}`);
+              const lines = edit.newContent.split("\n");
+              return [
+                {
+                  resource: uri,
+                  textEdit: {
+                    range: {
+                      startLineNumber: 1,
+                      startColumn: 1,
+                      endLineNumber: lines.length,
+                      endColumn: lines[lines.length - 1].length + 1,
+                    },
+                    text: edit.newContent,
+                  },
+                  versionId: undefined,
+                },
+              ];
+            }),
+          };
+
+          return workspaceEdits;
+        },
+
+        resolveRenameLocation(model, position) {
+          const word = model.getWordAtPosition(position);
+          if (!word) return { range: new monaco.Range(0, 0, 0, 0), text: "" };
+          return {
+            range: new monaco.Range(
+              position.lineNumber,
+              word.startColumn,
+              position.lineNumber,
+              word.endColumn,
+            ),
+            text: word.word,
+          };
         },
       });
     }
