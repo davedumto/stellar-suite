@@ -1,12 +1,32 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { FileNode, sampleContracts } from '@/lib/sample-contracts';
-import { NETWORK_CONFIG, NetworkKey, DEFAULT_CUSTOM_RPC } from '@/lib/networkConfig';
+import {
+  DEFAULT_CUSTOM_RPC,
+  NETWORK_CONFIG,
+  NetworkKey,
+} from "@/lib/networkConfig";
+import { FileNode, sampleContracts } from "@/lib/sample-contracts";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface TabInfo {
   path: string[];
   name: string;
 }
+
+export type MobilePanel =
+  | "none"
+  | "explorer"
+  | "interact"
+  | "deployments"
+  | "identities"
+  | "security";
+export type SidebarTab =
+  | "explorer"
+  | "deployments"
+  | "identities"
+  | "search"
+  | "security"
+  | "tests";
+export type BuildState = "idle" | "building" | "success" | "error";
 
 export interface WorkspaceTextFile {
   path: string;
@@ -27,10 +47,6 @@ export interface MockLedgerState {
   entries: MockLedgerEntry[];
 }
 
-export type MobilePanel = "none" | "explorer" | "interact" | "deployments" | "identities";
-export type SidebarTab = "explorer" | "deployments" | "identities" | "search" | "tests";
-export type BuildState = "idle" | "building" | "success" | "error";
-
 interface WorkspaceState {
   // File System State
   files: FileNode[];
@@ -43,6 +59,7 @@ interface WorkspaceState {
   horizonUrl: string;
   networkPassphrase: string;
   customRpcUrl: string;
+  customHeaders: CustomHeaders;
 
   // UI Layout State
   terminalExpanded: boolean;
@@ -80,9 +97,12 @@ interface WorkspaceState {
   setHorizonUrl: (url: string) => void;
   setNetworkPassphrase: (passphrase: string) => void;
   setCustomRpcUrl: (url: string) => void;
+  setCustomHeaders: (headers: CustomHeaders) => void;
 
   // UI Actions
-  setTerminalExpanded: (expanded: boolean | ((prev: boolean) => boolean)) => void;
+  setTerminalExpanded: (
+    expanded: boolean | ((prev: boolean) => boolean),
+  ) => void;
   setTerminalOutput: (output: string | ((prev: string) => string)) => void;
   setIsCompiling: (isCompiling: boolean) => void;
   setBuildState: (state: BuildState) => void;
@@ -115,7 +135,10 @@ const findNode = (nodes: FileNode[], pathParts: string[]): FileNode | null => {
   return null;
 };
 
-const findParent = (nodes: FileNode[], pathParts: string[]): FileNode[] | null => {
+const findParent = (
+  nodes: FileNode[],
+  pathParts: string[],
+): FileNode[] | null => {
   if (pathParts.length <= 1) return nodes;
   const parent = findNode(nodes, pathParts.slice(0, -1));
   return parent?.children ?? null;
@@ -126,23 +149,14 @@ export function flattenWorkspaceFiles(
   parentPath: string[] = []
 ): WorkspaceTextFile[] {
   const result: WorkspaceTextFile[] = [];
-
   for (const node of nodes) {
     const nextPath = [...parentPath, node.name];
-
     if (node.type === "folder" && node.children) {
       result.push(...flattenWorkspaceFiles(node.children, nextPath));
-      continue;
-    }
-
-    if (node.type === "file") {
-      result.push({
-        path: nextPath.join("/"),
-        content: node.content ?? "",
-      });
+    } else if (node.type === "file") {
+      result.push({ path: nextPath.join("/"), content: node.content ?? "" });
     }
   }
-
   return result;
 }
 
@@ -160,6 +174,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       horizonUrl: NETWORK_CONFIG.testnet.horizon,
       networkPassphrase: NETWORK_CONFIG.testnet.passphrase,
       customRpcUrl: DEFAULT_CUSTOM_RPC,
+      customHeaders: {},
 
       // Initial UI State
       terminalExpanded: true,
@@ -174,9 +189,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       mobilePanel: "none",
       isExplorerDragActive: false,
       leftSidebarTab: "explorer",
-      mockLedgerState: {
-        entries: [],
-      },
+      mockLedgerState: { entries: [] },
 
       // Initial Hydration State
       hydrationComplete: false,
@@ -198,16 +211,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const { openTabs, activeTabPath, unsavedFiles } = get();
         const nextTabs = openTabs.filter((t) => t.path.join("/") !== key);
         let nextActivePath = activeTabPath;
-
         if (activeTabPath.join("/") === key && nextTabs.length > 0) {
           nextActivePath = nextTabs[nextTabs.length - 1].path;
         } else if (nextTabs.length === 0) {
           nextActivePath = [];
         }
-
         const nextUnsaved = new Set(unsavedFiles);
         nextUnsaved.delete(key);
-
         set({
           openTabs: nextTabs,
           activeTabPath: nextActivePath,
@@ -219,7 +229,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const { files, unsavedFiles } = get();
         const nextFiles = cloneFiles(files);
         const node = findNode(nextFiles, path);
-
         if (node) {
           node.content = content;
           const nextUnsaved = new Set(unsavedFiles);
@@ -241,7 +250,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           parentPath.length === 0
             ? nextFiles
             : findNode(nextFiles, parentPath)?.children;
-
         if (parent) {
           parent.push({
             name,
@@ -249,8 +257,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             language: name.endsWith(".rs")
               ? "rust"
               : name.endsWith(".toml")
-              ? "toml"
-              : "text",
+                ? "toml"
+                : "text",
             content,
           });
           set({ files: nextFiles });
@@ -264,7 +272,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           parentPath.length === 0
             ? nextFiles
             : findNode(nextFiles, parentPath)?.children;
-
         if (parent) {
           parent.push({ name, type: "folder", children: [] });
           set({ files: nextFiles });
@@ -274,7 +281,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const { files } = get();
         const nextFiles = cloneFiles(files);
         const parent = findParent(nextFiles, path);
-
         if (parent) {
           const idx = parent.findIndex((n) => n.name === path[path.length - 1]);
           if (idx !== -1) {
@@ -290,10 +296,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const nextPath = [...path.slice(0, -1), newName];
         const nextFiles = cloneFiles(files);
         const node = findNode(nextFiles, path);
-
         if (node) {
           node.name = newName;
-
           const nextTabs = openTabs.map((t) => {
             const tKey = t.path.join("/");
             if (tKey === oldKey || tKey.startsWith(oldKey + "/")) {
@@ -306,7 +310,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             }
             return t;
           });
-
           let nextActivePath = activeTabPath;
           if (
             activeTabPath.join("/") === oldKey ||
@@ -314,7 +317,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ) {
             nextActivePath = [...nextPath, ...activeTabPath.slice(path.length)];
           }
-
           set({
             files: nextFiles,
             openTabs: nextTabs,
@@ -327,22 +329,24 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setNetwork: (network) => {
         const config = NETWORK_CONFIG[network] || NETWORK_CONFIG.testnet;
         const currentCustomRpc = get().customRpcUrl || DEFAULT_CUSTOM_RPC;
-        const horizonUrl = network === "local" ? currentCustomRpc : config.horizon;
-
+        const horizonUrl =
+          network === "local" ? currentCustomRpc : config.horizon;
         set({
           network,
           horizonUrl,
           networkPassphrase: config.passphrase,
         });
       },
-      setHorizonUrl: (horizonUrl) => set({ horizonUrl }),
-      setNetworkPassphrase: (networkPassphrase) => set({ networkPassphrase }),
+      setHorizonUrl: (url) => set({ horizonUrl: url }),
+      setNetworkPassphrase: (passphrase) =>
+        set({ networkPassphrase: passphrase }),
       setCustomRpcUrl: (customRpcUrl) => {
         set({ customRpcUrl });
         if (get().network === "local") {
           set({ horizonUrl: customRpcUrl });
         }
       },
+      setCustomHeaders: (customHeaders) => set({ customHeaders }),
 
       // UI Actions Implementation
       setTerminalExpanded: (expanded) =>
@@ -367,7 +371,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setCursorPos: (cursorPos) => set({ cursorPos }),
       setSaveStatus: (saveStatus) => set({ saveStatus }),
       setMobilePanel: (mobilePanel) => set({ mobilePanel }),
-      setIsExplorerDragActive: (isExplorerDragActive) => set({ isExplorerDragActive }),
+      setIsExplorerDragActive: (isExplorerDragActive) =>
+        set({ isExplorerDragActive }),
       setLeftSidebarTab: (leftSidebarTab) => set({ leftSidebarTab }),
       setMockLedgerState: (mockLedgerState) => set({ mockLedgerState }),
       clearMockLedgerState: () => set({ mockLedgerState: { entries: [] } }),
@@ -378,10 +383,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setHydrationComplete: (ready) => set({ hydrationComplete: ready }),
     }),
     {
-      name: 'stellar-suite-workspace-store',
+      name: "stellar-suite-workspace-store",
       partialize: (state) => ({
         network: state.network,
         customRpcUrl: state.customRpcUrl,
+        customHeaders: state.customHeaders,
         showExplorer: state.showExplorer,
         showPanel: state.showPanel,
         terminalExpanded: state.terminalExpanded,
@@ -395,6 +401,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           state.setHydrationComplete(true);
         }
       },
-    }
-  )
+    },
+  ),
 );
