@@ -3,8 +3,7 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { FileText, GitBranch, AlertCircle, ShieldOff, Globe } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CommitForm } from "@/components/vcs/CommitForm";
-import { GitIgnoreEditor } from "@/components/vcs/GitIgnoreEditor";
-import { RemoteManager } from "@/components/vcs/RemoteManager";
+import { StashPanel } from "@/components/vcs/StashPanel";
 import { useVCSStore } from "@/store/vcsStore";
 import { type GitFileStatus } from "@/lib/vcs/gitService";
 
@@ -135,6 +134,9 @@ export function GitPane() {
           <CommitForm />
         </>
       )}
+
+      <CommitForm />
+      <StashPanel />
     </div>
   );
 }
