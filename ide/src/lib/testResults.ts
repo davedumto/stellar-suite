@@ -7,6 +7,8 @@ export interface TestTraceLocation {
   label?: string;
 }
 
+const TRACE_LOCATION_PATTERN = /([A-Za-z0-9_./\\-]+\.[A-Za-z0-9_]+):(\d+)(?::(\d+))?/g;
+
 export interface TestCaseDiff {
   expected: string;
   actual: string;
@@ -440,6 +442,37 @@ export function resolveWorkspacePathForTrace(
   const contractName = parts[0];
   const fileName = parts[parts.length - 1];
   return findContractFilePath(files, contractName, fileName) ?? findPathByFilename(files, fileName);
+}
+
+export function extractTraceLocationsFromText(text: string): TestTraceLocation[] {
+  const matches = text.matchAll(TRACE_LOCATION_PATTERN);
+  const seen = new Set<string>();
+  const locations: TestTraceLocation[] = [];
+
+  for (const match of matches) {
+    const file = match[1]?.replace(/\\/g, "/");
+    const line = Number(match[2]);
+    const column = Number(match[3] ?? DEFAULT_TRACE_COLUMN);
+
+    if (!file || !Number.isFinite(line) || line <= 0 || !Number.isFinite(column) || column <= 0) {
+      continue;
+    }
+
+    const key = `${file}:${line}:${column}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    locations.push({
+      file,
+      line,
+      column,
+      label: "Detected in output",
+    });
+  }
+
+  return locations;
 }
 
 export function toRevealRange(

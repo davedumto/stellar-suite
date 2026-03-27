@@ -17,7 +17,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { TestCaseResult, TestRunResult } from "@/lib/testResults";
+import {
+  extractTraceLocationsFromText,
+  type TestCaseResult,
+  type TestRunResult,
+} from "@/lib/testResults";
 
 interface TestResultsLogProps {
   result: TestRunResult | null;
@@ -129,6 +133,16 @@ export function TestResultsLog({
             {result.cases.map((testCase, index) => {
               const isFailed = testCase.status === "failed";
               const isExpanded = expandedCases.includes(testCase.id);
+              const detectedTrace = extractTraceLocationsFromText(testCase.stdout);
+              const trace = [...testCase.trace];
+              const seenTraceKeys = new Set(trace.map((entry) => `${entry.file}:${entry.line}:${entry.column ?? 1}`));
+              for (const location of detectedTrace) {
+                const key = `${location.file}:${location.line}:${location.column ?? 1}`;
+                if (!seenTraceKeys.has(key)) {
+                  seenTraceKeys.add(key);
+                  trace.push(location);
+                }
+              }
 
               return (
                 <div
@@ -186,23 +200,23 @@ export function TestResultsLog({
                         />
                       </div>
 
-                      {testCase.trace.length > 0 && (
+                      {trace.length > 0 && (
                         <div className="space-y-1">
                           <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             Stack Trace
                           </div>
-                          {testCase.trace.map((trace) => (
+                          {trace.map((traceLocation) => (
                             <button
-                              key={`${testCase.id}-${trace.file}-${trace.line}-${trace.column}`}
+                              key={`${testCase.id}-${traceLocation.file}-${traceLocation.line}-${traceLocation.column}`}
                               type="button"
-                              onClick={() => onOpenTrace(trace.file, trace.line, trace.column)}
+                              onClick={() => onOpenTrace(traceLocation.file, traceLocation.line, traceLocation.column)}
                               className="flex w-full items-center justify-between rounded-md border border-border/60 bg-background/80 px-3 py-2 text-left font-mono text-[11px] text-terminal-cyan transition-colors hover:border-terminal-cyan/50 hover:bg-terminal-cyan/5"
                             >
                               <span className="truncate">
-                                {trace.file}:{trace.line}:{trace.column ?? 1}
+                                {traceLocation.file}:{traceLocation.line}:{traceLocation.column ?? 1}
                               </span>
                               <span className="ml-3 shrink-0 text-[10px] text-muted-foreground">
-                                {trace.label ?? "Open in editor"}
+                                {traceLocation.label ?? "Open in editor"}
                               </span>
                             </button>
                           ))}
