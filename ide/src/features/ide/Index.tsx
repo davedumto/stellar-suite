@@ -43,6 +43,8 @@ import { useDiagnosticsStore } from "@/store/useDiagnosticsStore";
 import { useIdentityStore } from "@/store/useIdentityStore";
 import { useWorkspaceStore, flattenWorkspaceFiles } from "@/store/workspaceStore";
 import { useVCSStore } from "@/store/vcsStore";
+import { useErrorHelpStore } from "@/store/useErrorHelpStore";
+import ErrorHelpPanel from "@/components/ide/ErrorHelpPanel";
 import { parseCargoAuditOutput } from "@/utils/cargoAuditParser";
 import { parseMixedOutput } from "@/utils/cargoParser";
 import { parseClippyOutput, type ClippyLint } from "@/utils/clippyParser";
@@ -190,6 +192,7 @@ export default function Index() {
     useVCSStore();
   const { setDiagnostics, clearDiagnostics } = useDiagnosticsStore();
   const { addContract } = useDeployedContractsStore();
+  const { isOpen: isErrorHelpOpen, errorCode, closeErrorHelp } = useErrorHelpStore();
   const {
     isDeployModalOpen,
     deploymentStep,
@@ -843,6 +846,12 @@ export default function Index() {
         </main>
 
         <aside className="hidden md:flex">
+          {isErrorHelpOpen && errorCode ? (
+            <div className="w-96 shrink-0">
+              <ErrorHelpPanel errorCode={errorCode} onClose={closeErrorHelp} />
+            </div>
+          ) : null}
+
           {showPanel ? (
             <div className="w-80 border-l border-border bg-card">
               <ContractPanel

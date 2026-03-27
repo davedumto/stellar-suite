@@ -5,6 +5,8 @@ import { useWorkspaceStore } from "@/store/workspaceStore";
 import { applyEditsToTree, computeRenameEdits, validateRustIdentifier } from "@/utils/renameProvider";
 import { useDiagnosticsStore as _useDiagnosticsStore } from "@/store/useDiagnosticsStore";
 import { useEditorStore } from "@/store/editorStore";
+import { useErrorHelpStore } from "@/store/useErrorHelpStore";
+import { extractErrorCode, hasErrorHelp } from "@/utils/errorCodeExtractor";
 import {
   createRustFoldingRangeProvider,
   RUST_FOLD_REGION_END,
@@ -33,10 +35,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
   const { config, setMathDiagnostics, getAllDiagnostics } = useMathSafetyStore();
   const { getFileCoverage } = useCoverageStore();
   const { setJumpToLine, saveViewState, getViewState } = useEditorStore();
+  const { openErrorHelp } = useErrorHelpStore();
   const rustProviderRegistered = useRef(false);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);  const semanticProviderRegistered = useRef(false);
   const coverageDecorations = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const codeActionProviderRegistered = useRef(false);
 
   // Git gutter: track mounted editor/monaco and HEAD content for active file
   const [mountedEditor, setMountedEditor] = useState<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -398,6 +402,51 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ onCursorChange, onSave }) => {
           fontStyle: "italic",
         },
       ]);
+    }
+
+    // Register code action provider for error help
+    if (!codeActionProviderRegistered.current) {
+      codeActionProviderRegistered.current = true;
+
+      monaco.languages.registerCodeActionProvider("rust", {
+        provideCodeActions: (model, range, context) => {
+          const actions: Monaco.languages.CodeAction[] = [];
+
+          // Check if there are any diagnostics at this position
+          for (const marker of context.markers) {
+            // Extract error code from marker message
+            const errorCode = extractErrorCode(marker.message);
+
+            if (errorCode && hasErrorHelp(errorCode)) {
+              actions.push({
+                title: `💡 Learn More About ${errorCode}`,
+                kind: "quickfix",
+                diagnostics: [marker],
+                isPreferred: true,
+                command: {
+                  id: "stellar.openErrorHelp",
+                  title: "Open Error Help",
+                  arguments: [errorCode],
+                },
+              });
+            }
+          }
+
+          return {
+            actions,
+            dispose: () => {},
+          };
+        },
+      });
+
+      // Register the command to open error help
+      editor.addAction({
+        id: "stellar.openErrorHelp",
+        label: "Open Error Help",
+        run: (_editor, errorCode: string) => {
+          openErrorHelp(errorCode);
+        },
+      });
     }
 
     if (!rustProviderRegistered.current) {
