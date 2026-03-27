@@ -2,6 +2,7 @@
 
 import { CommandPalette } from "@/components/ide/CommandPalette";
 import { MobileGatekeeper } from "@/components/ide/MobileGatekeeper";
+import { QuickOpen } from "@/components/ide/QuickOpen";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -60,6 +61,8 @@ export default function HomePage() {
         <Sonner />
         <MobileGatekeeper />
         <XdrInspector />
+        <Index />
+        <QuickOpen />
         <CommandPalette
           open={commandPaletteOpen}
           onOpenChange={setCommandPaletteOpen}
