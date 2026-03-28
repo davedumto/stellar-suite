@@ -6,12 +6,14 @@ import {
   History,
   Search,
   Beaker,
+  Bug,
   ShieldAlert,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   ListTree,
   Library,
+  FileSearch,
   Binary,
   BarChart2,
 } from "lucide-react";
@@ -25,11 +27,13 @@ export type ActivityTab =
   | "search"
   | "security"
   | "tests"
+  | "fuzzing"
   | "outline"
   | "references"
   | "binary-diff"
   | "oracle"
-  | "benchmarks";
+  | "benchmarks"
+  | "inspector";
 
 interface ActivityBarProps {
   activeTab: ActivityTab;
@@ -99,6 +103,18 @@ const tabs: ActivityBarTab[] = [
     icon: <Beaker className="h-5 w-5" />,
     label: "Tests",
     title: "Test Explorer",
+  },
+  {
+    id: "fuzzing",
+    icon: <Bug className="h-5 w-5" />,
+    label: "Fuzzing",
+    title: "cargo-fuzz Security Testing",
+  },
+  {
+    id: "inspector",
+    icon: <FileSearch className="h-5 w-5" />,
+    label: "Inspector",
+    title: "WASM Contract Inspector",
   },
   {
     id: "references",

@@ -189,6 +189,17 @@ export function TestExplorer({ onGasProfileUpdate }: TestExplorerProps) {
     }
   };
 
+  const getStatusIcon = (status: TestResult['status']) => {
+    switch (status) {
+      case 'passed':
+        return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-rose-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-amber-500" />;
+    }
+  };
+
   return (
     <TooltipProvider>
       <Card className="h-full flex flex-col">

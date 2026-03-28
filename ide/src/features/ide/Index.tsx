@@ -19,27 +19,35 @@ import { DiffEditorPane } from "@/components/editor/DiffEditorPane";
 // import { EditorTabs } from "@/components/ide/EditorTabs";
 import { FileExplorer } from "@/components/ide/FileExplorer";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
-import { OracleAssistant } from "@/components/ide/OracleAssistant";
-import { SearchPane } from "@/components/ide/SearchPane";
+import { GlobalSearch } from "@/components/sidebar/GlobalSearch";
 import { SecurityView } from "@/components/ide/SecurityView";
 import { TestingView, TemplatesView } from "@/components/ide/TestingView";
 import { GeneratePropertyTest } from "@/components/Testing/GeneratePropertyTest";
 import { useProptestOutputWatcher } from "@/hooks/useProptestOutputWatcher";
+import { ProptestView } from "@/components/Panels/ProptestView";
 import { EventsPane } from "@/components/ide/EventsPane";
 import { ReferencesPane } from "@/components/ide/ReferencesPane";
 import { InspectorPane } from "@/components/ide/InspectorPane";
 import { ProptestView } from "@/components/Panels/ProptestView";
 import { StatusBar } from "@/components/ide/StatusBar";
 import { Terminal } from "@/components/ide/Terminal";
+import { TestResultsLog } from "@/components/terminal/TestResultsLog";
 // import TestExplorer from "@/components/ide/TestExplorer";
 import XdrInspector from "@/components/tools/XdrInspector";
 // import { Toolbar } from "@/components/ide/Toolbar";
 import { OutlineView } from "@/components/sidebar/OutlineView";
+import { FuzzingPanel } from "@/components/sidebar/FuzzingPanel";
+// import { ActivityBar } from "@/components/layout/ActivityBar";
 import { StarterProjectWizard } from "@/components/modals/StarterProjectWizard";
 import { ActivityBar } from "@/components/layout/ActivityBar";
 import { NETWORK_CONFIG, type NetworkKey } from "@/lib/networkConfig";
 import { BenchmarkDashboard } from "@/components/charts/BenchmarkDashboard";
 import { type FileNode } from "@/lib/sample-contracts";
+import {
+  discoverWorkspaceTests,
+  hasRootTestsDirectory,
+  listIntegrationTargets,
+} from "@/lib/integrationTestDiscovery";
 import { instantiateContract } from "@/lib/contractInstantiator";
 import { useDeployedContractsStore } from "@/store/useDeployedContractsStore";
 import { useDeploymentStore } from "@/store/useDeploymentStore";
@@ -56,6 +64,15 @@ import {
   createStreamProcessor,
   readCompileResponse,
 } from "@/utils/compileStream";
+import {
+  createStructuredTestOutputFromCargoRun,
+  createSimulatedCargoTestOutput,
+  formatTestRunForTerminal,
+  parseStructuredTestOutput,
+  resolveWorkspacePathForTrace,
+  toRevealRange,
+  type TestRunResult,
+} from "@/lib/testResults";
 
 const COMPILE_API_URL =
   process.env.NEXT_PUBLIC_COMPILE_API_URL ?? "/api/compile";
@@ -189,6 +206,7 @@ export default function Index() {
     mockLedgerState,
     diffViewPath,
     setDiffViewPath,
+    setTerminalOutput,
   } = useWorkspaceStore();
 
   const { activeContext, activeIdentity, loadIdentities } = useIdentityStore();
@@ -239,6 +257,7 @@ export default function Index() {
   const [isRunningAudit, setIsRunningAudit] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [lastAuditRunAt, setLastAuditRunAt] = useState<string | null>(null);
+  const [testRun, setTestRun] = useState<TestRunResult | null>(null);
 
   useEffect(() => {
     loadIdentities();
@@ -633,6 +652,7 @@ export default function Index() {
   ]);
 
   const handleTest = useCallback(() => {
+    void (async () => {
     setTerminalExpanded(true);
 
     if (mockLedgerState.entries.length > 0) {
@@ -644,12 +664,181 @@ export default function Index() {
       );
     }
 
-    appendTerminalOutput("Running tests...\r\n");
-    setTimeout(() => {
-      appendTerminalOutput("✓ test_hello ... ok\r\n");
-      appendTerminalOutput("test result: ok. 1 passed; 0 failed;\r\n");
-    }, 900);
-  }, [appendTerminalOutput, setTerminalExpanded, mockLedgerState]);
+      const discoveredTests = discoverWorkspaceTests(files, contractName);
+      const integrationTargets = listIntegrationTargets(discoveredTests);
+      const hasRootTests = hasRootTestsDirectory(files, contractName);
+
+      if (discoveredTests.length === 0) {
+        appendTerminalOutput("No Rust tests discovered for the active contract.\r\n");
+        return;
+      }
+
+      appendTerminalOutput(
+        `Detected ${discoveredTests.length} test(s): ${discoveredTests.filter((test) => test.testType === "integration").length} integration, ${discoveredTests.filter((test) => test.testType === "unit").length} unit.\r\n`,
+      );
+      if (hasRootTests) {
+        appendTerminalOutput("Integration tests folder detected at contract root: tests/.\r\n");
+      }
+
+      try {
+        const response = await fetch("/api/run-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contractName,
+            files: compilePayload.files,
+            mode: "full",
+            integrationTargets,
+          }),
+        });
+
+        const payload = (await response.json()) as {
+          success: boolean;
+          mode?: "full" | "failed-only";
+          command?: string;
+          stdout?: string;
+          stderr?: string;
+          outcomes?: Record<string, "passed" | "failed">;
+          error?: string;
+        };
+
+        if (!response.ok || payload.error) {
+          throw new Error(payload.error || `Run test request failed (status ${response.status})`);
+        }
+
+        const rawOutput = createStructuredTestOutputFromCargoRun(
+          payload,
+          discoveredTests.map((test) => ({
+            id: test.id,
+            suite: test.contractName,
+            name: test.testName,
+            testType: test.testType,
+            rerunCommand: `cargo test ${test.testName} -- --exact`,
+          })),
+        );
+
+        const nextRun = parseStructuredTestOutput(rawOutput);
+        setTestRun(nextRun);
+        setTerminalOutput(formatTestRunForTerminal(nextRun));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Run test request failed";
+        appendTerminalOutput(`Falling back to simulated tests: ${message}\r\n`);
+        const rawOutput = createSimulatedCargoTestOutput({ files, activeTabPath });
+        const nextRun = parseStructuredTestOutput(rawOutput);
+        setTestRun(nextRun);
+        setTerminalOutput(formatTestRunForTerminal(nextRun));
+      }
+    })();
+  }, [
+    activeTabPath,
+    appendTerminalOutput,
+    compilePayload.files,
+    contractName,
+    files,
+    mockLedgerState,
+    setTerminalExpanded,
+    setTerminalOutput,
+  ]);
+
+  const handleRerunFailedTests = useCallback(() => {
+    void (async () => {
+      const failedTestNames =
+        testRun?.cases.filter((testCase) => testCase.status === "failed").map((testCase) => testCase.name) ?? [];
+
+      if (failedTestNames.length === 0) {
+        return;
+      }
+
+      const discoveredTests = discoverWorkspaceTests(files, contractName);
+      const integrationTargets = listIntegrationTargets(discoveredTests);
+
+      try {
+        const response = await fetch("/api/run-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contractName,
+            files: compilePayload.files,
+            mode: "failed-only",
+            failedTestNames,
+            integrationTargets,
+          }),
+        });
+
+        const payload = (await response.json()) as {
+          success: boolean;
+          mode?: "full" | "failed-only";
+          command?: string;
+          stdout?: string;
+          stderr?: string;
+          outcomes?: Record<string, "passed" | "failed">;
+          error?: string;
+        };
+
+        if (!response.ok || payload.error) {
+          throw new Error(payload.error || `Run test request failed (status ${response.status})`);
+        }
+
+        const selectedTests = discoveredTests.filter((test) =>
+          failedTestNames.includes(test.testName),
+        );
+
+        const rawOutput = createStructuredTestOutputFromCargoRun(
+          payload,
+          selectedTests.map((test) => ({
+            id: test.id,
+            suite: test.contractName,
+            name: test.testName,
+            testType: test.testType,
+            rerunCommand: `cargo test ${test.testName} -- --exact`,
+          })),
+        );
+
+        const nextRun = parseStructuredTestOutput(rawOutput);
+        setTestRun(nextRun);
+        setTerminalExpanded(true);
+        setTerminalOutput(formatTestRunForTerminal(nextRun));
+      } catch {
+        const rawOutput = createSimulatedCargoTestOutput({
+          files,
+          activeTabPath,
+          previousRun: testRun,
+          rerunFailedOnly: true,
+        });
+        const nextRun = parseStructuredTestOutput(rawOutput);
+        setTestRun(nextRun);
+        setTerminalExpanded(true);
+        setTerminalOutput(formatTestRunForTerminal(nextRun));
+      }
+    })();
+  }, [activeTabPath, compilePayload.files, contractName, files, setTerminalExpanded, setTerminalOutput, testRun]);
+
+  const handleOpenTestTrace = useCallback(
+    (traceFile: string, line: number, column = 1) => {
+      const pathParts = resolveWorkspacePathForTrace(traceFile, files);
+      if (!pathParts) {
+        appendTerminalOutput(`Unable to resolve ${traceFile}:${line}:${column}\r\n`);
+        return;
+      }
+      addTab(pathParts, pathParts[pathParts.length - 1]);
+      setActiveTabPath(pathParts);
+      window.dispatchEvent(
+        new CustomEvent("ide:reveal-range", {
+          detail: {
+            fileId: pathParts.join("/"),
+            pathParts,
+            range: toRevealRange(line, column),
+          },
+        }),
+      );
+    },
+    [addTab, appendTerminalOutput, files, setActiveTabPath],
+  );
+
+  const handleClearTerminal = useCallback(() => {
+    setTerminalOutput("");
+    setTestRun(null);
+  }, [setTerminalOutput]);
 
   const handleInvoke = useCallback(
     async (fn: string, args: string) => {
@@ -714,7 +903,7 @@ export default function Index() {
       /> */}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* <ActivityBar
+        <ActivityBar
           activeTab={leftSidebarTab}
           onTabChange={(tab) => {
             if (leftSidebarTab === tab && showExplorer) {
@@ -727,7 +916,7 @@ export default function Index() {
           }}
           sidebarVisible={showExplorer}
           onToggleSidebar={() => setShowExplorer(!showExplorer)}
-        /> */}
+        />
 
         {showExplorer ? (
           <aside className="hidden w-72 shrink-0 border-r border-border bg-sidebar md:block">
@@ -748,12 +937,7 @@ export default function Index() {
               <IdentitiesView network={network} />
             ) : null}
             {leftSidebarTab === "search" ? (
-              <SearchPane
-                onResultSelect={(pathParts, _range) => {
-                  addTab(pathParts, pathParts[pathParts.length - 1]);
-                  setActiveTabPath(pathParts);
-                }}
-              />
+              <GlobalSearch />
             ) : null}
             {leftSidebarTab === "outline" ? <OutlineView /> : null}
             {leftSidebarTab === "security" ? (
@@ -776,30 +960,10 @@ export default function Index() {
                 </div>
               </div>
             ) : null}
-            {/*
             {leftSidebarTab === "tests" ? (
-              <TestExplorer
-                files={flattenWorkspaceFiles(files)}
-                onOpenTest={(test) => {
-                  const pathParts = test.filePath.split("/");
-                  const name = pathParts[pathParts.length - 1];
-                  addTab(pathParts, name);
-                  setActiveTabPath(pathParts);
-                }}
-                onRunTest={(test) => {
-                  setTerminalExpanded(true);
-                  if (mockLedgerState.entries.length > 0) {
-                    appendTerminalOutput(
-                      `Injecting ${mockLedgerState.entries.length} mock ledger ${mockLedgerState.entries.length === 1 ? "entry" : "entries"} via --ledger-snapshot...\r\n`,
-                    );
-                  }
-                  appendTerminalOutput(
-                    `Running test ${test.testName} (${test.kind}) in ${test.filePath}:${test.line}\r\n`,
-                  );
-                }}
-              />
+              <TestingSidebar />
             ) : null}
-            */}
+            {leftSidebarTab === "fuzzing" ? <FuzzingPanel /> : null}
             {leftSidebarTab === "git" ? <GitPane /> : null}
             {leftSidebarTab === "references" ? <ReferencesPane /> : null}
             {leftSidebarTab === "binary-diff" ? (
@@ -872,7 +1036,18 @@ export default function Index() {
 
             {/* Tab panels */}
             <div className="min-h-0 flex-1 overflow-hidden">
-              {bottomTab === "console"  && <Terminal />}
+              {bottomTab === "console" && (
+                <Terminal
+                  onClear={handleClearTerminal}
+                  supplementaryContent={
+                    <TestResultsLog
+                      result={testRun}
+                      onOpenTrace={handleOpenTestTrace}
+                      onRerunFailed={handleRerunFailedTests}
+                    />
+                  }
+                />
+              )}
               {bottomTab === "events"   && <EventsPane />}
               {bottomTab === "proptest" && <ProptestView />}
             </div>
