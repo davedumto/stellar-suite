@@ -19,7 +19,7 @@ import { DiffEditorPane } from "@/components/editor/DiffEditorPane";
 // import { EditorTabs } from "@/components/ide/EditorTabs";
 import { FileExplorer } from "@/components/ide/FileExplorer";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
-import { SearchPane } from "@/components/ide/SearchPane";
+import { GlobalSearch } from "@/components/sidebar/GlobalSearch";
 import { SecurityView } from "@/components/ide/SecurityView";
 import { TestingView, TemplatesView } from "@/components/ide/TestingView";
 import { GeneratePropertyTest } from "@/components/Testing/GeneratePropertyTest";
@@ -28,6 +28,7 @@ import { ProptestView } from "@/components/Panels/ProptestView";
 import { EventsPane } from "@/components/ide/EventsPane";
 import { ReferencesPane } from "@/components/ide/ReferencesPane";
 import { InspectorPane } from "@/components/ide/InspectorPane";
+import { ProptestView } from "@/components/Panels/ProptestView";
 import { StatusBar } from "@/components/ide/StatusBar";
 import { Terminal } from "@/components/ide/Terminal";
 import { TestResultsLog } from "@/components/terminal/TestResultsLog";
@@ -40,6 +41,7 @@ import { FuzzingPanel } from "@/components/sidebar/FuzzingPanel";
 import { StarterProjectWizard } from "@/components/modals/StarterProjectWizard";
 import { ActivityBar } from "@/components/layout/ActivityBar";
 import { NETWORK_CONFIG, type NetworkKey } from "@/lib/networkConfig";
+import { BenchmarkDashboard } from "@/components/charts/BenchmarkDashboard";
 import { type FileNode } from "@/lib/sample-contracts";
 import {
   discoverWorkspaceTests,
@@ -935,12 +937,7 @@ export default function Index() {
               <IdentitiesView network={network} />
             ) : null}
             {leftSidebarTab === "search" ? (
-              <SearchPane
-                onResultSelect={(pathParts, _range) => {
-                  addTab(pathParts, pathParts[pathParts.length - 1]);
-                  setActiveTabPath(pathParts);
-                }}
-              />
+              <GlobalSearch />
             ) : null}
             {leftSidebarTab === "outline" ? <OutlineView /> : null}
             {leftSidebarTab === "security" ? (
@@ -987,6 +984,7 @@ export default function Index() {
               </div>
             ) : null}
             {leftSidebarTab === "inspector" ? <InspectorPane /> : null}
+            {leftSidebarTab === "benchmarks" ? <BenchmarkDashboard /> : null}
           </aside>
         ) : null}
 
