@@ -36,7 +36,7 @@ import { Terminal } from "@/components/ide/Terminal";
 import { TestResultsLog } from "@/components/terminal/TestResultsLog";
 // import TestExplorer from "@/components/ide/TestExplorer";
 import XdrInspector from "@/components/tools/XdrInspector";
-// import { Toolbar } from "@/components/ide/Toolbar";
+import { Toolbar } from "@/components/ide/Toolbar";
 import { OutlineView } from "@/components/sidebar/OutlineView";
 import { FuzzingPanel } from "@/components/sidebar/FuzzingPanel";
 // import { ActivityBar } from "@/components/layout/ActivityBar";
@@ -902,7 +902,7 @@ export default function Index() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      {/* <Toolbar
+      <Toolbar
         onCompile={handleCompile}
         onDeploy={() => { void handleDeploy(); }}
         onTest={handleTest}
@@ -914,7 +914,7 @@ export default function Index() {
         isRunningClippy={isRunningClippy}
         onRunAudit={handleRunAudit}
         isRunningAudit={isRunningAudit}
-      /> */}
+      />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ActivityBar
