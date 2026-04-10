@@ -320,7 +320,6 @@ export function ContractPanel({ contractId, onInvoke, invokeState, lastInvocatio
                   Create an identity to get started
                 </button>
               )}
-            </div>
 
             {lastInvocation && (
               <div className="rounded-md border border-primary/20 bg-primary/5 p-3 space-y-3">

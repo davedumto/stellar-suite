@@ -280,7 +280,9 @@ self.addEventListener('message', async (e) => {
   }
 
   if (msg.type === 'compile') {
-    const { id, files, contractName } = msg;
+    const { id, payload } = msg;
+    const files = msg.files ?? payload?.files;
+    const contractName = msg.contractName ?? payload?.contractName;
     const token = { cancelled: false };
     cancelTokens.set(id, token);
 

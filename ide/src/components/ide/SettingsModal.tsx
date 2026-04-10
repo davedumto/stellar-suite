@@ -16,7 +16,7 @@ import { useTheme } from "next-themes";
 import { EnvVarManager } from "@/components/settings/EnvVarManager";
 import { ResourceUsageDashboard } from "@/components/settings/ResourceUsageDashboard";
 import { ThemeEditor } from "@/components/settings/ThemeEditor";
-import { Diagnostics } from "@/pages/Diagnostics";
+import { Diagnostics } from "@/components/settings/Diagnostics";
 import { useTranslation } from "react-i18next";
 import {
   Select,

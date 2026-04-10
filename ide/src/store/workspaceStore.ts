@@ -37,6 +37,7 @@ export type SidebarTab =
   | "inspector"
   | "references"
   | "binary-diff"
+  | "oracle"
   | "benchmarks"
   | "audit"
   | "assets"

@@ -4,48 +4,32 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PanelRightClose,
   PanelRightOpen,
-  Binary,
-  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import CodeEditor from "@/components/ide/CodeEditor";
-import { BinaryDiffTool } from "@/features/ide/BinaryDiffTool";
+import { FileExplorer } from "@/components/ide/FileExplorer";
 import { ContractPanel } from "@/components/ide/ContractPanel";
 import { DeploymentStepper } from "@/components/ide/DeploymentStepper";
-import { DeploymentsView } from "@/components/ide/DeploymentsView";
-import { MultisigView } from "@/components/ide/MultisigView";
-import { LiquidityPoolSimulator } from "@/components/ide/LiquidityPoolSimulator";
-import { GitPane } from "@/components/ide/GitPane";
-import { DiffEditorPane } from "@/components/editor/DiffEditorPane";
-// import { EditorTabs } from "@/components/ide/EditorTabs";
-import { FileExplorer } from "@/components/ide/FileExplorer";
+import { SidebarTab } from "@/store/workspaceStore";
 import { IdentitiesView } from "@/components/ide/IdentitiesView";
 import { GlobalSearch } from "@/components/sidebar/GlobalSearch";
 import { SecurityView } from "@/components/ide/SecurityView";
 import { TestingView, TemplatesView } from "@/components/ide/TestingView";
 import { GeneratePropertyTest } from "@/components/Testing/GeneratePropertyTest";
-import { useProptestOutputWatcher } from "@/hooks/useProptestOutputWatcher";
 import { ProptestView } from "@/components/Panels/ProptestView";
 import { EventsPane } from "@/components/ide/EventsPane";
-import { ReferencesPane } from "@/components/ide/ReferencesPane";
-import { InspectorPane } from "@/components/ide/InspectorPane";
 import { StatusBar } from "@/components/ide/StatusBar";
 import { Terminal } from "@/components/ide/Terminal";
 import { useTerminalBridge } from "@/hooks/useTerminalBridge";
 import { TestResultsLog } from "@/components/terminal/TestResultsLog";
-// import TestExplorer from "@/components/ide/TestExplorer";
-import XdrInspector from "@/components/tools/XdrInspector";
-import { Toolbar } from "@/components/ide/Toolbar";
-import { OutlineView } from "@/components/sidebar/OutlineView";
-import { FuzzingPanel } from "@/components/sidebar/FuzzingPanel";
-import { AssetManager } from "@/components/sidebar/AssetManager";
-// import { ActivityBar } from "@/components/layout/ActivityBar";
-import { StarterProjectWizard } from "@/components/modals/StarterProjectWizard";
-import { ActivityBar } from "@/components/layout/ActivityBar";
-import { NETWORK_CONFIG, type NetworkKey } from "@/lib/networkConfig";
 import { useLayoutStore } from "@/lib/layout/layoutStore";
-import { BenchmarkDashboard } from "@/components/charts/BenchmarkDashboard";
+import { DeploymentsView } from "@/components/ide/DeploymentsView";
+import { GitPane } from "@/components/ide/GitPane";
+import CodeEditor from "@/components/ide/CodeEditor";
+import { Toolbar } from "@/components/ide/Toolbar";
+import { StarterProjectWizard } from "@/components/modals/StarterProjectWizard";
+import { ActivityBar, type ActivityTab } from "@/components/layout/ActivityBar";
+import { NETWORK_CONFIG, type NetworkKey } from "@/lib/networkConfig";
 import { type FileNode } from "@/lib/sample-contracts";
 import {
   discoverWorkspaceTests,
@@ -66,7 +50,6 @@ import { useSharedEnvironmentStore } from "@/store/useSharedEnvironmentStore";
 import { useAuditLogStore } from "@/store/useAuditLogStore";
 import { useUserSettingsStore } from "@/store/useUserSettingsStore";
 import { useAuth } from "@/hooks/useAuth";
-import { AuditLogView } from "@/components/ide/AuditLogView";
 import { useVCSStore } from "@/store/vcsStore";
 import { useErrorHelpStore } from "@/store/useErrorHelpStore";
 import ErrorHelpPanel from "@/components/ide/ErrorHelpPanel";
@@ -161,9 +144,9 @@ const formatRunTime = () =>
     second: "2-digit",
   });
 
-// ---------------------------------------------------------------------------
+
 // TestingSidebar — three sub-tabs: Snippets | Templates | Generate
-// ---------------------------------------------------------------------------
+
 
 function TestingSidebar() {
   const [tab, setTab] = useState<"snippets" | "templates" | "generate">(
@@ -314,8 +297,6 @@ export default function Index() {
     loadIdentities();
   }, [loadIdentities]);
 
-  // Watch terminal output and drive the proptest store in real time
-  useProptestOutputWatcher();
   useEffect(() => {
     if (!hydrationComplete) {
       return;
@@ -791,7 +772,7 @@ export default function Index() {
     appendTerminalOutput(`> Deploying to ${network}…\r\n`);
 
     try {
-      // ── Phase 1: compile + upload WASM ──────────────────────────────────
+      // Phase 1: compile + upload WASM
       setDeploymentStep("uploading");
       appendTerminalOutput("> Compiling and uploading WASM…\r\n");
 
@@ -833,7 +814,7 @@ export default function Index() {
       // Persist hash so the user can retry instantiation without re-uploading
       setPendingWasmHash(wasmHash);
 
-      // ── Phase 2: instantiate contract ───────────────────────────────────
+      // Phase 2: instantiate contract
       await runInstantiate(wasmHash);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Deployment failed";
@@ -1155,14 +1136,14 @@ export default function Index() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ActivityBar
-          activeTab={leftSidebarTab}
+          activeTab={leftSidebarTab as ActivityTab}
           onTabChange={(tab) => {
             if (leftSidebarTab === tab && showExplorer) {
               setShowExplorer(false);
               return;
             }
 
-            setLeftSidebarTab(tab);
+            setLeftSidebarTab(tab as SidebarTab);
             setShowExplorer(true);
           }}
           sidebarVisible={showExplorer}
@@ -1188,7 +1169,6 @@ export default function Index() {
               <IdentitiesView network={network} />
             ) : null}
             {leftSidebarTab === "search" ? <GlobalSearch /> : null}
-            {leftSidebarTab === "outline" ? <OutlineView /> : null}
             {leftSidebarTab === "security" ? (
               <div className="h-full overflow-y-auto">
                 <SecurityView
@@ -1204,62 +1184,16 @@ export default function Index() {
                   lastClippyRunAt={lastClippyRunAt}
                   lastAuditRunAt={lastAuditRunAt}
                 />
-                <div className="border-t border-border">
-                  <XdrInspector />
-                </div>
               </div>
             ) : null}
-            {leftSidebarTab === "tests" ? <TestingSidebar /> : null}
-            {leftSidebarTab === "fuzzing" ? <FuzzingPanel /> : null}
+            {leftSidebarTab === "tests" ? <TestingView /> : null}
             {leftSidebarTab === "git" ? <GitPane /> : null}
-            {leftSidebarTab === "references" ? <ReferencesPane /> : null}
-            {leftSidebarTab === "binary-diff" ? (
-              <div className="flex flex-col h-full bg-sidebar p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-wider">
-                  <Binary className="h-4 w-4" />
-                  <span>Binary Auditing</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed italic">
-                  Compare compiled WASM binaries side-by-side to audit changes
-                  in public symbols and byte-level logic.
-                </p>
-                <div className="p-3 bg-muted/50 rounded-lg border border-border">
-                  <h4 className="text-[10px] font-bold uppercase mb-1.5 flex items-center gap-1.5">
-                    <Activity className="h-3 w-3" /> Quick Tip
-                  </h4>
-                  <p className="text-[10px] text-muted-foreground">
-                    Select two builds in the main area to analyze the delta
-                    between them.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-            {leftSidebarTab === "inspector" ? <InspectorPane /> : null}
-            {leftSidebarTab === "benchmarks" ? <BenchmarkDashboard /> : null}
-            {leftSidebarTab === "multisig" ? (
-              <MultisigView network={network} />
-            ) : null}
-            {leftSidebarTab === "liquidity" ? <LiquidityPoolSimulator /> : null}
-            {leftSidebarTab === "audit" ? <AuditLogView /> : null}
-            {leftSidebarTab === "assets" ? <AssetManager /> : null}
           </aside>
         ) : null}
 
         <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* <EditorTabs /> */}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {leftSidebarTab === "binary-diff" ? (
-              <BinaryDiffTool />
-            ) : diffViewPath ? (
-              <DiffEditorPane
-                path={diffViewPath}
-                currentContent={activeFileContext?.content ?? ""}
-                language={activeFileContext?.language ?? "text"}
-              />
-            ) : (
-              <CodeEditor />
-            )}
-          </div>
+            <CodeEditor />
           <div className="h-56 shrink-0 border-t border-border flex flex-col">
             {/* Bottom panel tab bar */}
             <div
@@ -1271,7 +1205,6 @@ export default function Index() {
                 [
                   { id: "console", label: "Console" },
                   { id: "events", label: "Events" },
-                  { id: "proptest", label: "Proptest" },
                 ] as const
               ).map((tab) => (
                 <button

@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -21,12 +20,13 @@ export const metadata: Metadata = {
   },
 };
 
+import { Providers } from "@/providers/Providers";
 import { ErrorBoundary } from "@/components/ide/ErrorBoundary";
 import { AppStatusProvider } from "@/components/providers/AppStatusProvider";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <a 
           href="#main-content" 
@@ -34,13 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to main content
         </a>
-        <AuthSessionProvider>
+        <Providers>
           <ErrorBoundary>
             <AppStatusProvider>
               {children}
             </AppStatusProvider>
           </ErrorBoundary>
-        </AuthSessionProvider>
+        </Providers>
       </body>
     </html>
   );
