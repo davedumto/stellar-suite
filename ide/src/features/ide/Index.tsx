@@ -59,12 +59,12 @@ import ErrorHelpPanel from "@/components/ide/ErrorHelpPanel";
 import { useCloudSyncStore } from "@/store/useCloudSyncStore";
 import { ConflictModal } from "@/components/cloud/ConflictModal";
 import { parseCargoAuditOutput } from "@/utils/cargoAuditParser";
-import { parseMixedOutput } from "@/utils/cargoParser";
-import { parseClippyOutput, type ClippyLint } from "@/utils/clippyParser";
+import { type ClippyLint } from "@/utils/clippyParser";
 import {
   createStreamProcessor,
   readCompileResponse,
 } from "@/utils/compileStream";
+import { getDiagnosticsWorker } from "./workers/DiagnosticsWorker";
 import {
   createStructuredTestOutputFromCargoRun,
   createSimulatedCargoTestOutput,
@@ -438,7 +438,9 @@ export default function Index() {
         onChunk: appendTerminalOutput,
       });
 
-      const diagnostics = parseMixedOutput(result.output, contractName);
+      // Offload diagnostics parsing to worker to keep UI responsive
+      const diagnosticsWorker = getDiagnosticsWorker();
+      const diagnostics = await diagnosticsWorker.parseDiagnostics(result.output, contractName);
       setDiagnostics(diagnostics);
 
       if (!result.ok) {
@@ -530,8 +532,13 @@ export default function Index() {
       };
 
       const output = `${payload.stdout ?? ""}${payload.stderr ?? ""}`;
-      const parsedClippy = parseClippyOutput(output, contractName);
-      const parsedDiagnostics = parseMixedOutput(output, contractName);
+
+      // Offload diagnostics parsing to worker to keep UI responsive
+      const diagnosticsWorker = getDiagnosticsWorker();
+      const [parsedClippy, parsedDiagnostics] = await Promise.all([
+        diagnosticsWorker.parseClippy(output, contractName),
+        diagnosticsWorker.parseDiagnostics(output, contractName)
+      ]);
 
       setDiagnostics(
         parsedDiagnostics.length > 0
