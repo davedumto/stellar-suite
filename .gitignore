@@ -34,4 +34,4 @@ extension/templates/**/*.wasm
 issues/
 
 docs
-local
+local/
